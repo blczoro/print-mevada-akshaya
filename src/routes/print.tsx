@@ -114,8 +114,7 @@ function PrintPage() {
     await new Promise((r) => setTimeout(r, 600));
     setStage("sending");
     submitMutation.mutate({
-      documentId: activeFile.id,
-      fileName: activeFile.name,
+      file: activeFile,
       printerId: printer.id,
       printerName: printer.name,
       settings,
