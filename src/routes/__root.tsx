@@ -82,10 +82,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "SwiftPrint — Self-service printing from any device" },
       { name: "description", content: "Upload documents, configure print settings, and send jobs to any connected printer — no operator required." },
-      { property: "og:title", content: "SwiftPrint — Self-service printing" },
-      { property: "og:description", content: "Upload, configure, and print from your phone, tablet, or laptop." },
+      { property: "og:title", content: "SwiftPrint — Self-service printing from any device" },
+      { property: "og:description", content: "Upload documents, configure print settings, and send jobs to any connected printer — no operator required." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "SwiftPrint — Self-service printing from any device" },
+      { name: "twitter:description", content: "Upload documents, configure print settings, and send jobs to any connected printer — no operator required." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/22691dc7-0ef4-4dbc-9ee7-8cd5c80846ea/id-preview-731437f0--74b0c372-efa8-4c98-9b9d-4694ed887cb1.lovable.app-1783582480574.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/22691dc7-0ef4-4dbc-9ee7-8cd5c80846ea/id-preview-731437f0--74b0c372-efa8-4c98-9b9d-4694ed887cb1.lovable.app-1783582480574.png" },
     ],
     links: [
       {
