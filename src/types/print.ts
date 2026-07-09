@@ -30,12 +30,12 @@ export interface UploadedFile {
 
 export type PrinterStatus = "online" | "offline" | "busy" | "ready";
 
-export type PrinterConnection = "wifi" | "ethernet" | "usb";
-export type PrinterProtocol = "IPP" | "RAW" | "LPR";
-export type PrinterSource = "auto" | "manual";
+export type PrinterConnection = "wifi" | "ethernet" | "usb" | "bluetooth" | "unknown";
 
 export interface Printer {
   id: string;
+  providerPrinterId?: number;
+  computerName?: string;
   name: string;
   location?: string;
   status: PrinterStatus;
@@ -44,25 +44,11 @@ export interface Printer {
   model?: string;
   manufacturer?: string;
   ipAddress?: string;
-  hostname?: string;
   port?: number;
-  protocol?: PrinterProtocol;
   connection?: PrinterConnection;
   paperSizes?: PaperSize[];
-  source?: PrinterSource;
+  isDefault?: boolean;
 }
-
-export interface ManualPrinterInput {
-  name: string;
-  address: string; // ip or hostname
-  port: number;
-  protocol: PrinterProtocol;
-  connection: PrinterConnection;
-}
-
-export type PrinterTestResult =
-  | { ok: true; printer: Printer }
-  | { ok: false; reason: "not_found" | "timeout" | "auth_required" | "error"; message: string };
 
 export type JobStatus =
   | "preparing"
