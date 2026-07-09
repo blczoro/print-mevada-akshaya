@@ -1,53 +1,64 @@
-import { API_CONFIG } from "@/config/api";
-import type { PrintJob, PrintSettings, JobStatus } from "@/types/print";
+import { submitPrintJobFn, fetchJobStatusFn } from "@/lib/printnode.functions";
+import type { PrintJob, PrintSettings, JobStatus, UploadedFile } from "@/types/print";
+
+async function fileToBase64(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  let bin = "";
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
 
 export interface SubmitJobArgs {
-  documentId: string;
-  fileName: string;
+  file: UploadedFile;
   printerId: string;
   printerName: string;
   settings: PrintSettings;
 }
 
 export async function submitPrintJob(args: SubmitJobArgs): Promise<PrintJob> {
-  if (API_CONFIG.useMockApi) {
-    await delay(1200);
-    return {
-      id: `JOB-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-      fileName: args.fileName,
-      printerId: args.printerId,
-      printerName: args.printerName,
-      settings: args.settings,
-      status: "queued",
-      createdAt: Date.now(),
-    };
+  const contentBase64 = await fileToBase64(args.file.file);
+  const isPdfOrImage =
+    args.file.file.type === "application/pdf" || args.file.file.type.startsWith("image/");
+  if (!isPdfOrImage) {
+    throw new Error(
+      "Only PDF and image files can be sent directly to the printer. Please convert Office documents to PDF first.",
+    );
   }
-  const res = await fetch(API_CONFIG.endpoints.submitJob, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(args),
+  const res = await submitPrintJobFn({
+    data: {
+      printerId: args.printerId,
+      fileName: args.file.name,
+      contentBase64,
+      contentType: "pdf_base64",
+      title: args.file.name,
+      copies: args.settings.copies,
+      color: args.settings.mode === "color",
+      duplex: args.settings.duplex === "double",
+      paperSize: args.settings.paperSize,
+      settings: args.settings as unknown as Record<string, unknown>,
+    },
   });
-  if (!res.ok) throw new Error("Failed to submit print job");
-  return res.json();
+  return {
+    id: res.id,
+    fileName: args.file.name,
+    printerId: args.printerId,
+    printerName: res.printerName,
+    settings: args.settings,
+    status: "queued",
+    createdAt: Date.now(),
+  };
 }
 
 export async function fetchJobStatus(id: string): Promise<{ status: JobStatus }> {
-  if (API_CONFIG.useMockApi) {
-    await delay(300);
-    return { status: "printing" };
-  }
-  const res = await fetch(API_CONFIG.endpoints.jobStatus(id));
-  if (!res.ok) throw new Error("Failed to fetch job status");
-  return res.json();
+  const res = await fetchJobStatusFn({ data: { id } });
+  return { status: (res.status as JobStatus) ?? "queued" };
 }
 
-export async function cancelPrintJob(id: string): Promise<void> {
-  if (API_CONFIG.useMockApi) {
-    await delay(300);
-    return;
-  }
-  const res = await fetch(API_CONFIG.endpoints.cancelJob(id), { method: "POST" });
-  if (!res.ok) throw new Error("Failed to cancel job");
+export async function cancelPrintJob(_id: string): Promise<void> {
+  // PrintNode job cancellation is not exposed here; extend with DELETE /printjobs/<id> if needed.
+  return;
 }
-
-function delay(ms: number) { return new Promise((r) => setTimeout(r, ms)); }

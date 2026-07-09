@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Printer as PrinterIcon,
   MapPin,
@@ -8,18 +8,33 @@ import {
   Wifi,
   Cable,
   Usb,
+  Bluetooth,
+  HelpCircle,
   Star,
-  Plus,
   Pencil,
   Trash2,
   PrinterCheck,
+  AlertCircle,
 } from "lucide-react";
-import { fetchPrinters } from "@/services/printer";
+import {
+  fetchPrinters,
+  discoverPrinters,
+  setDefaultPrinter,
+  renamePrinter,
+  deletePrinter,
+} from "@/services/printer";
 import type { Printer, PrinterConnection, PrinterStatus } from "@/types/print";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import { ManualPrinterDialog } from "@/components/manual-printer-dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 const STATUS_STYLES: Record<PrinterStatus, string> = {
@@ -33,6 +48,8 @@ const CONN_ICON: Record<PrinterConnection, React.ComponentType<{ className?: str
   wifi: Wifi,
   ethernet: Cable,
   usb: Usb,
+  bluetooth: Bluetooth,
+  unknown: HelpCircle,
 };
 
 interface Props {
@@ -41,76 +58,93 @@ interface Props {
 }
 
 export function PrinterSelector({ selectedId, onSelect }: Props) {
-  const { data: discovered, isLoading, refetch, isFetching } = useQuery({
+  const qc = useQueryClient();
+  const { data: printers, isLoading, error } = useQuery({
     queryKey: ["printers"],
     queryFn: fetchPrinters,
   });
 
-  const [manualPrinters, setManualPrinters] = useLocalStorage<Printer[]>(
-    "swiftprint:manual-printers",
-    [],
-  );
-  const [defaultId, setDefaultId] = useLocalStorage<string | null>(
-    "swiftprint:default-printer",
-    null,
-  );
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Printer | undefined>();
+  const discoverMut = useMutation({
+    mutationFn: discoverPrinters,
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["printers"] });
+      toast.success(`Discovered ${r.discovered} printer${r.discovered === 1 ? "" : "s"}`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Discovery failed"),
+  });
 
-  const printers = useMemo<Printer[]>(
-    () => [...(discovered ?? []), ...manualPrinters],
-    [discovered, manualPrinters],
-  );
+  const setDefaultMut = useMutation({
+    mutationFn: setDefaultPrinter,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["printers"] }),
+  });
 
-  // Auto-select default on first load
+  const deleteMut = useMutation({
+    mutationFn: deletePrinter,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["printers"] });
+      toast("Printer removed from your list");
+    },
+  });
+
+  const [renaming, setRenaming] = useState<Printer | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  const renameMut = useMutation({
+    mutationFn: (v: { id: string; displayName: string }) => renamePrinter(v.id, v.displayName),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["printers"] });
+      setRenaming(null);
+      toast.success("Renamed");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Auto-discover on first mount (if empty)
   useEffect(() => {
-    if (selectedId || !defaultId) return;
-    const p = printers.find((x) => x.id === defaultId);
-    if (p) onSelect(p);
-  }, [defaultId, printers, selectedId, onSelect]);
+    if (!isLoading && printers && printers.length === 0 && !discoverMut.isPending) {
+      discoverMut.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
-  const openAdd = () => { setEditing(undefined); setDialogOpen(true); };
-  const openEdit = (p: Printer) => { setEditing(p); setDialogOpen(true); };
+  // Auto-select default
+  useEffect(() => {
+    if (selectedId || !printers) return;
+    const def = printers.find((p) => p.isDefault);
+    if (def) onSelect(def);
+  }, [printers, selectedId, onSelect]);
 
-  const saveManual = (p: Printer) => {
-    setManualPrinters((prev) => {
-      const idx = prev.findIndex((x) => x.id === p.id);
-      if (idx >= 0) { const copy = [...prev]; copy[idx] = p; return copy; }
-      return [...prev, p];
-    });
-  };
-
-  const removeManual = (id: string) => {
-    setManualPrinters((prev) => prev.filter((x) => x.id !== id));
-    if (defaultId === id) setDefaultId(null);
-    toast("Printer removed");
-  };
-
-  const setDefault = (p: Printer) => {
-    setDefaultId(p.id);
-    toast.success(`${p.name} set as default`);
-  };
-
-  const empty = !isLoading && printers.length === 0;
+  const list = printers ?? [];
+  const empty = !isLoading && list.length === 0;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          {isLoading
-            ? "Scanning network for printers…"
-            : `${printers.length} printer${printers.length === 1 ? "" : "s"} available`}
+          {isLoading || discoverMut.isPending
+            ? "Scanning for printers…"
+            : `${list.length} printer${list.length === 1 ? "" : "s"} available`}
         </p>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />
-            Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={openAdd}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add manually
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => discoverMut.mutate()}
+          disabled={discoverMut.isPending}
+        >
+          <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", discoverMut.isPending && "animate-spin")} />
+          Refresh
+        </Button>
       </div>
+
+      {error ? (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Couldn't load printers</p>
+            <p className="text-xs opacity-90">{(error as Error).message}</p>
+          </div>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="grid h-32 place-items-center text-muted-foreground">
@@ -120,21 +154,30 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center">
           <PrinterCheck className="h-8 w-8 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium">No printers found</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              We couldn&apos;t discover any printers on your network.
+            <p className="text-sm font-medium">No printers connected yet</p>
+            <p className="mt-0.5 text-xs text-muted-foreground max-w-sm">
+              Install the free PrintNode client on any computer with a printer, sign in, and it will
+              appear here automatically.
             </p>
           </div>
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="mr-1.5 h-4 w-4" /> Add printer manually
+          <a
+            href="https://www.printnode.com/en/download"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-medium text-primary underline underline-offset-2"
+          >
+            Get the PrintNode client →
+          </a>
+          <Button size="sm" onClick={() => discoverMut.mutate()} disabled={discoverMut.isPending}>
+            <RefreshCw className={cn("mr-1.5 h-4 w-4", discoverMut.isPending && "animate-spin")} />
+            Scan again
           </Button>
         </div>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
-          {printers.map((p) => {
+          {list.map((p) => {
             const selected = p.id === selectedId;
             const disabled = p.status === "offline";
-            const isDefault = defaultId === p.id;
             const ConnIcon = p.connection ? CONN_ICON[p.connection] : null;
             return (
               <li key={p.id}>
@@ -159,30 +202,31 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
-                        {isDefault && <Star className="h-3.5 w-3.5 fill-warning text-warning" />}
-                        {p.source === "manual" && (
-                          <span className="rounded bg-muted px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">manual</span>
-                        )}
+                        {p.isDefault && <Star className="h-3.5 w-3.5 fill-warning text-warning" />}
                       </div>
-                      {p.model && (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {p.manufacturer ? `${p.manufacturer} · ` : ""}{p.model}
-                        </p>
-                      )}
-                      {p.location && (
+                      {p.computerName && (
                         <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3" /> {p.location}
+                          <MapPin className="h-3 w-3" /> {p.computerName}
                         </p>
                       )}
                     </div>
-                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize", STATUS_STYLES[p.status])}>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
+                        STATUS_STYLES[p.status],
+                      )}
+                    >
                       {p.status}
                     </span>
                   </button>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[52px] text-[11px] text-muted-foreground">
-                    {p.ipAddress && <span className="font-mono">{p.ipAddress}{p.port ? `:${p.port}` : ""}</span>}
-                    {ConnIcon && <span className="inline-flex items-center gap-1 capitalize"><ConnIcon className="h-3 w-3" />{p.connection}</span>}
+                    {ConnIcon && (
+                      <span className="inline-flex items-center gap-1 capitalize">
+                        <ConnIcon className="h-3 w-3" />
+                        {p.connection}
+                      </span>
+                    )}
                     <span>{p.supportsColor ? "Color" : "B&W"}</span>
                     <span>{p.supportsDuplex ? "Duplex" : "Single-side"}</span>
                     {p.paperSizes && p.paperSizes.length > 0 && (
@@ -195,22 +239,31 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setDefault(p)}
-                      disabled={isDefault}
+                      onClick={() => setDefaultMut.mutate(p.id)}
+                      disabled={!!p.isDefault || setDefaultMut.isPending}
                     >
-                      <Star className={cn("mr-1 h-3 w-3", isDefault && "fill-warning text-warning")} />
-                      {isDefault ? "Default" : "Set default"}
+                      <Star className={cn("mr-1 h-3 w-3", p.isDefault && "fill-warning text-warning")} />
+                      {p.isDefault ? "Default" : "Set default"}
                     </Button>
-                    {p.source === "manual" && (
-                      <>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => openEdit(p)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive" onClick={() => removeManual(p.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => {
+                        setRenaming(p);
+                        setRenameValue(p.name);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                      onClick={() => deleteMut.mutate(p.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               </li>
@@ -219,12 +272,33 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
         </ul>
       )}
 
-      <ManualPrinterDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSave={saveManual}
-        initial={editing}
-      />
+      <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename printer</DialogTitle>
+            <DialogDescription>Give this printer a friendlier name to show in the list.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder="e.g. Reception color printer"
+            maxLength={120}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenaming(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                renaming && renameMut.mutate({ id: renaming.id, displayName: renameValue.trim() })
+              }
+              disabled={!renameValue.trim() || renameMut.isPending}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
