@@ -14,7 +14,122 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      print_jobs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          file_name: string
+          id: string
+          printer_id: string | null
+          provider: string
+          provider_job_id: string | null
+          settings: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          id?: string
+          printer_id?: string | null
+          provider?: string
+          provider_job_id?: string | null
+          settings?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          id?: string
+          printer_id?: string | null
+          provider?: string
+          provider_job_id?: string | null
+          settings?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_jobs_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      printers: {
+        Row: {
+          capabilities: Json
+          computer_id: string | null
+          computer_name: string | null
+          connection_type: string | null
+          created_at: string
+          display_name: string
+          driver_name: string | null
+          id: string
+          ip_address: string | null
+          is_default: boolean
+          last_connected_at: string | null
+          mac_address: string | null
+          model: string | null
+          port: number | null
+          printer_name: string
+          provider: string
+          provider_printer_id: string
+          status: string
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          capabilities?: Json
+          computer_id?: string | null
+          computer_name?: string | null
+          connection_type?: string | null
+          created_at?: string
+          display_name: string
+          driver_name?: string | null
+          id?: string
+          ip_address?: string | null
+          is_default?: boolean
+          last_connected_at?: string | null
+          mac_address?: string | null
+          model?: string | null
+          port?: number | null
+          printer_name: string
+          provider?: string
+          provider_printer_id: string
+          status?: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          capabilities?: Json
+          computer_id?: string | null
+          computer_name?: string | null
+          connection_type?: string | null
+          created_at?: string
+          display_name?: string
+          driver_name?: string | null
+          id?: string
+          ip_address?: string | null
+          is_default?: boolean
+          last_connected_at?: string | null
+          mac_address?: string | null
+          model?: string | null
+          port?: number | null
+          printer_name?: string
+          provider?: string
+          provider_printer_id?: string
+          status?: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
