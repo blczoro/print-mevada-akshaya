@@ -16,7 +16,7 @@ import { PrinterSelector } from "@/components/printer-selector";
 import { PrintPreview } from "@/components/print-preview";
 
 import { uploadDocument } from "@/services/upload";
-import { submitPrintJob } from "@/services/print";
+import { submitPrintJob, fetchJobStatus } from "@/services/print";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import type {
   Printer,
@@ -253,11 +253,23 @@ function SubmissionScreen({ job, onReset }: { job: PrintJob; onReset: () => void
   const [status, setStatus] = useState<PrintJob["status"]>(job.status);
 
   useEffect(() => {
-    const timers = [
-      setTimeout(() => setStatus("printing"), 1500),
-      setTimeout(() => setStatus("completed"), 5000),
-    ];
-    return () => timers.forEach(clearTimeout);
+    let cancelled = false;
+    const terminal = new Set(["completed", "failed", "cancelled"]);
+    const tick = async () => {
+      try {
+        const r = await fetchJobStatus(job.id);
+        if (cancelled) return;
+        setStatus(r.status);
+        if (!terminal.has(r.status)) setTimeout(tick, 2000);
+      } catch {
+        if (!cancelled) setTimeout(tick, 4000);
+      }
+    };
+    const t = setTimeout(tick, 1200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [job.id]);
 
   const done = status === "completed";
