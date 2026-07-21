@@ -39,6 +39,14 @@ function PrintPage() {
   const activeFile = files[0];
   const ready = !!activeFile && activeFile.status === "ready" && !!printer && printer.status !== "offline";
 
+  useSharedFile((shared) => {
+    setFiles((prev) => {
+      prev.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+      return [shared];
+    });
+    toast.success(`Loaded shared file: ${shared.name}`);
+  });
+
   const addFiles = (incoming: File[]) => {
     files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
     const first = incoming[0];
