@@ -78,7 +78,7 @@ export function readPendingSharedFile(): UploadedFile | null {
       const ext = mime.split("/")[1]?.split("+")[0];
       if (ext) name = `${name}.${ext === "jpeg" ? "jpg" : ext}`;
     }
-    const file = new File([bytes], name, { type: mime });
+    const file = new File([bytes.buffer as ArrayBuffer], name, { type: mime });
     const canPreview = mime.startsWith("image/") || mime === "application/pdf" || mime.startsWith("text/");
     return {
       id: crypto.randomUUID(),
