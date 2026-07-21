@@ -1,21 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, Printer as PrinterIcon, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
+import { Loader2, Printer as PrinterIcon, CheckCircle2, XCircle, RotateCcw, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 import { FileDropzone } from "@/components/file-dropzone";
 import { FileList } from "@/components/file-list";
 import { PrinterSelector } from "@/components/printer-selector";
+import { PrintPreview } from "@/components/print-preview";
+import { PrintSettingsPanel } from "@/components/print-settings-panel";
+import { RecentJobs } from "@/components/recent-jobs";
 
 import { uploadDocument } from "@/services/upload";
 import { submitPrintJob, fetchJobStatus } from "@/services/print";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import type { Printer, PrintJob, PrintSettings, UploadedFile } from "@/types/print";
 import { DEFAULT_SETTINGS } from "@/types/print";
 
@@ -25,18 +28,17 @@ export const Route = createFileRoute("/")({
 
 function PrintPage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [copies, setCopies] = useState(1);
-  const [color, setColor] = useState(false);
-  const [duplex, setDuplex] = useState(false);
+  const [settings, setSettings] = useLocalStorage<PrintSettings>("print-settings", DEFAULT_SETTINGS);
   const [printer, setPrinter] = useState<Printer | undefined>();
   const [job, setJob] = useState<PrintJob | undefined>();
   const [stage, setStage] = useState<"idle" | "sending" | "submitted">("idle");
+  const [showSettings, setShowSettings] = useState(false);
+  const [recent, setRecent] = useLocalStorage<PrintJob[]>("recent-jobs", []);
 
   const activeFile = files[0];
   const ready = !!activeFile && activeFile.status === "ready" && !!printer && printer.status !== "offline";
 
   const addFiles = (incoming: File[]) => {
-    // Only keep the most recent file for simplicity
     files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
     const first = incoming[0];
     if (!first) return;
@@ -79,6 +81,7 @@ function PrintPage() {
     onSuccess: (created) => {
       setJob(created);
       setStage("submitted");
+      setRecent([created, ...recent].slice(0, 10));
       toast.success("Print job sent");
     },
     onError: (err: Error) => {
@@ -89,12 +92,6 @@ function PrintPage() {
 
   const handlePrint = () => {
     if (!activeFile || !printer) return;
-    const settings: PrintSettings = {
-      ...DEFAULT_SETTINGS,
-      mode: color ? "color" : "bw",
-      duplex: duplex ? "double" : "single",
-      copies: Math.max(1, Math.min(99, copies)),
-    };
     setStage("sending");
     submitMutation.mutate({ file: activeFile, printerId: printer.id, printerName: printer.name, settings });
   };
@@ -107,21 +104,24 @@ function PrintPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10 sm:py-14">
-      <div className="mb-8 text-center">
+    <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+      <div className="mb-6 text-center">
         <h1 className="text-3xl font-bold tracking-tight">Print</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Upload a PDF or image, pick a printer, hit print.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Upload, preview, pick a printer, hit print.</p>
       </div>
 
       {stage === "submitted" && job ? (
-        <SubmissionScreen job={job} onReset={reset} />
+        <SubmissionScreen job={job} onReset={reset} onStatus={(s) => {
+          setRecent((prev) => prev.map((j) => (j.id === job.id ? { ...j, status: s } : j)));
+        }} />
       ) : (
         <Card>
           <CardContent className="space-y-6 p-6">
             <div className="space-y-3">
               <Label>File</Label>
-              <FileDropzone onFiles={addFiles} />
+              <FileDropzone onFiles={addFiles} multiple={false} />
               <FileList files={files} onRemove={removeFile} />
+              {activeFile && activeFile.status === "ready" && <PrintPreview file={activeFile} />}
             </div>
 
             <div className="space-y-3">
@@ -129,27 +129,25 @@ function PrintPage() {
               <PrinterSelector selectedId={printer?.id} onSelect={setPrinter} />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="copies">Copies</Label>
-                <Input
-                  id="copies"
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={copies}
-                  onChange={(e) => setCopies(parseInt(e.target.value) || 1)}
-                />
-              </div>
-              <div className="flex flex-col justify-end gap-2">
-                <Label htmlFor="color" className="text-sm">Color</Label>
-                <Switch id="color" checked={color} onCheckedChange={setColor} disabled={!printer?.supportsColor} />
-              </div>
-              <div className="flex flex-col justify-end gap-2">
-                <Label htmlFor="duplex" className="text-sm">Double-sided</Label>
-                <Switch id="duplex" checked={duplex} onCheckedChange={setDuplex} disabled={!printer?.supportsDuplex} />
-              </div>
-            </div>
+            <Collapsible open={showSettings} onOpenChange={setShowSettings}>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-lg border border-border bg-card/60 px-3 py-2 text-sm hover:bg-accent/40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" /> Print settings
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {settings.copies}× · {settings.paperSize} · {settings.mode === "color" ? "Color" : "B&W"} ·{" "}
+                    {settings.duplex === "double" ? "Duplex" : "Single"}
+                  </span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3">
+                <PrintSettingsPanel settings={settings} onChange={setSettings} printer={printer} />
+              </CollapsibleContent>
+            </Collapsible>
 
             <Button
               className="w-full"
@@ -166,11 +164,21 @@ function PrintPage() {
           </CardContent>
         </Card>
       )}
+
+      <RecentJobs jobs={recent} onClear={() => setRecent([])} />
     </div>
   );
 }
 
-function SubmissionScreen({ job, onReset }: { job: PrintJob; onReset: () => void }) {
+function SubmissionScreen({
+  job,
+  onReset,
+  onStatus,
+}: {
+  job: PrintJob;
+  onReset: () => void;
+  onStatus?: (s: PrintJob["status"]) => void;
+}) {
   const [status, setStatus] = useState<PrintJob["status"]>(job.status);
 
   useEffect(() => {
@@ -181,6 +189,7 @@ function SubmissionScreen({ job, onReset }: { job: PrintJob; onReset: () => void
         const r = await fetchJobStatus(job.id);
         if (cancelled) return;
         setStatus(r.status);
+        onStatus?.(r.status);
         if (!terminal.has(r.status)) setTimeout(tick, 2000);
       } catch {
         if (!cancelled) setTimeout(tick, 4000);
@@ -188,7 +197,7 @@ function SubmissionScreen({ job, onReset }: { job: PrintJob; onReset: () => void
     };
     const t = setTimeout(tick, 1200);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [job.id]);
+  }, [job.id, onStatus]);
 
   const done = status === "completed";
   const failed = status === "failed" || status === "cancelled";
