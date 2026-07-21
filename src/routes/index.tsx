@@ -1,121 +1,214 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
-import { UploadCloud, Sliders, Printer, ArrowRight, ShieldCheck, Zap, Smartphone, FileCheck2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Loader2, Printer as PrinterIcon, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+
+import { FileDropzone } from "@/components/file-dropzone";
+import { FileList } from "@/components/file-list";
+import { PrinterSelector } from "@/components/printer-selector";
+
+import { uploadDocument } from "@/services/upload";
+import { submitPrintJob, fetchJobStatus } from "@/services/print";
+import type { Printer, PrintJob, PrintSettings, UploadedFile } from "@/types/print";
+import { DEFAULT_SETTINGS } from "@/types/print";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: PrintPage,
 });
 
-function Index() {
+function PrintPage() {
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [copies, setCopies] = useState(1);
+  const [color, setColor] = useState(false);
+  const [duplex, setDuplex] = useState(false);
+  const [printer, setPrinter] = useState<Printer | undefined>();
+  const [job, setJob] = useState<PrintJob | undefined>();
+  const [stage, setStage] = useState<"idle" | "sending" | "submitted">("idle");
+
+  const activeFile = files[0];
+  const ready = !!activeFile && activeFile.status === "ready" && !!printer && printer.status !== "offline";
+
+  const addFiles = (incoming: File[]) => {
+    // Only keep the most recent file for simplicity
+    files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+    const first = incoming[0];
+    if (!first) return;
+    const uf: UploadedFile = {
+      id: crypto.randomUUID(),
+      file: first,
+      name: first.name,
+      size: first.size,
+      progress: 0,
+      status: "uploading",
+    };
+    setFiles([uf]);
+    uploadDocument(first, (pct) =>
+      setFiles((prev) => prev.map((x) => (x.id === uf.id ? { ...x, progress: pct } : x))),
+    )
+      .then((res) =>
+        setFiles((prev) =>
+          prev.map((x) =>
+            x.id === uf.id
+              ? { ...x, status: "ready", progress: 100, pageCount: res.pageCount, previewUrl: res.previewUrl }
+              : x,
+          ),
+        ),
+      )
+      .catch((err) => {
+        setFiles((prev) => prev.map((x) => (x.id === uf.id ? { ...x, status: "error", error: String(err.message ?? err) } : x)));
+        toast.error(`Failed to upload ${uf.name}`);
+      });
+  };
+
+  const removeFile = (id: string) =>
+    setFiles((prev) => {
+      const t = prev.find((x) => x.id === id);
+      if (t?.previewUrl) URL.revokeObjectURL(t.previewUrl);
+      return prev.filter((x) => x.id !== id);
+    });
+
+  const submitMutation = useMutation({
+    mutationFn: submitPrintJob,
+    onSuccess: (created) => {
+      setJob(created);
+      setStage("submitted");
+      toast.success("Print job sent");
+    },
+    onError: (err: Error) => {
+      setStage("idle");
+      toast.error(err.message || "Failed to submit");
+    },
+  });
+
+  const handlePrint = () => {
+    if (!activeFile || !printer) return;
+    const settings: PrintSettings = {
+      ...DEFAULT_SETTINGS,
+      mode: color ? "color" : "bw",
+      duplex: duplex ? "double" : "single",
+      copies: Math.max(1, Math.min(99, copies)),
+    };
+    setStage("sending");
+    submitMutation.mutate({ file: activeFile, printerId: printer.id, printerName: printer.name, settings });
+  };
+
+  const reset = () => {
+    files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+    setFiles([]);
+    setJob(undefined);
+    setStage("idle");
+  };
+
   return (
-    <div>
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-40"
-          style={{ background: "var(--gradient-surface)" }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-32 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full blur-3xl opacity-30"
-          style={{ background: "var(--gradient-hero)" }}
-        />
-        <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-          <div className="mx-auto max-w-3xl text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" /> No operator. No queue. No hassle.
-            </span>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-              Print from anywhere,{" "}
-              <span
-                className="bg-clip-text text-transparent"
-                style={{ backgroundImage: "var(--gradient-hero)" }}
-              >
-                in seconds.
-              </span>
-            </h1>
-            <p className="mt-5 text-base text-muted-foreground sm:text-lg">
-              Upload your document from any device, configure your settings, and send it
-              straight to the nearest printer. That's it.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Button asChild size="lg" className="shadow-[var(--shadow-elegant)]">
-                <Link to="/print">
-                  <UploadCloud className="mr-2 h-4 w-4" />
-                  Upload document
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <a href="#how">See how it works <ArrowRight className="ml-2 h-4 w-4" /></a>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+    <div className="mx-auto max-w-2xl px-4 py-10 sm:py-14">
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold tracking-tight">Print</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Upload a PDF or image, pick a printer, hit print.</p>
+      </div>
 
-      {/* How it works */}
-      <section id="how" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Three simple steps</h2>
-          <p className="mt-3 text-muted-foreground">From your phone to paper — in under a minute.</p>
-        </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {[
-            { icon: UploadCloud, title: "Upload", body: "Drag & drop or pick a file from your device. PDFs, Office docs, and images all welcome." },
-            { icon: Sliders,     title: "Configure", body: "Choose color, duplex, paper size, page range, and copies. Preview instantly." },
-            { icon: Printer,     title: "Print",     body: "Pick a nearby printer, hit print, and grab your pages. You'll get a job ID to track it." },
-          ].map((s, i) => (
-            <div
-              key={s.title}
-              className="group relative rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-1 hover:shadow-[var(--shadow-elegant)]"
+      {stage === "submitted" && job ? (
+        <SubmissionScreen job={job} onReset={reset} />
+      ) : (
+        <Card>
+          <CardContent className="space-y-6 p-6">
+            <div className="space-y-3">
+              <Label>File</Label>
+              <FileDropzone onFiles={addFiles} />
+              <FileList files={files} onRemove={removeFile} />
+            </div>
+
+            <div className="space-y-3">
+              <Label>Printer</Label>
+              <PrinterSelector selectedId={printer?.id} onSelect={setPrinter} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="copies">Copies</Label>
+                <Input
+                  id="copies"
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={copies}
+                  onChange={(e) => setCopies(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div className="flex flex-col justify-end gap-2">
+                <Label htmlFor="color" className="text-sm">Color</Label>
+                <Switch id="color" checked={color} onCheckedChange={setColor} disabled={!printer?.supportsColor} />
+              </div>
+              <div className="flex flex-col justify-end gap-2">
+                <Label htmlFor="duplex" className="text-sm">Double-sided</Label>
+                <Switch id="duplex" checked={duplex} onCheckedChange={setDuplex} disabled={!printer?.supportsDuplex} />
+              </div>
+            </div>
+
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={!ready || stage !== "idle"}
+              onClick={handlePrint}
             >
-              <div
-                className="grid h-11 w-11 place-items-center rounded-xl text-primary-foreground shadow-[var(--shadow-elegant)]"
-                style={{ background: "var(--gradient-hero)" }}
-              >
-                <s.icon className="h-5 w-5" />
-              </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Step {i + 1}</p>
-              <h3 className="mt-1 text-lg font-semibold text-foreground">{s.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="border-t border-border/60 bg-muted/40">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-          <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
-            <div>
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Built for busy places.</h2>
-              <p className="mt-3 text-muted-foreground">
-                Libraries, campuses, coworking spaces, offices. Wherever people print, SwiftPrint
-                makes it fast, self-service, and reliable.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button asChild><Link to="/print">Get started</Link></Button>
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {[
-                { icon: Smartphone, title: "Any device", body: "Phone, tablet, laptop — same clean experience." },
-                { icon: Zap,         title: "Fast",       body: "Uploads and previews render instantly." },
-                { icon: ShieldCheck, title: "Private",    body: "Files aren't stored longer than the print job needs." },
-                { icon: FileCheck2,  title: "All formats",body: "PDF, Word, PowerPoint, Excel, images, TXT." },
-              ].map((f) => (
-                <div key={f.title} className="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-soft)]">
-                  <f.icon className="h-5 w-5 text-primary" />
-                  <h3 className="mt-3 font-semibold">{f.title}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{f.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+              {stage === "sending" ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending…</>
+              ) : (
+                <><PrinterIcon className="mr-2 h-4 w-4" />Print</>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  );
+}
+
+function SubmissionScreen({ job, onReset }: { job: PrintJob; onReset: () => void }) {
+  const [status, setStatus] = useState<PrintJob["status"]>(job.status);
+
+  useEffect(() => {
+    let cancelled = false;
+    const terminal = new Set(["completed", "failed", "cancelled"]);
+    const tick = async () => {
+      try {
+        const r = await fetchJobStatus(job.id);
+        if (cancelled) return;
+        setStatus(r.status);
+        if (!terminal.has(r.status)) setTimeout(tick, 2000);
+      } catch {
+        if (!cancelled) setTimeout(tick, 4000);
+      }
+    };
+    const t = setTimeout(tick, 1200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [job.id]);
+
+  const done = status === "completed";
+  const failed = status === "failed" || status === "cancelled";
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-4 p-10 text-center">
+        {done ? <CheckCircle2 className="h-14 w-14 text-success" /> :
+          failed ? <XCircle className="h-14 w-14 text-destructive" /> :
+          <Loader2 className="h-14 w-14 animate-spin text-primary" />}
+        <div>
+          <h2 className="text-xl font-bold">
+            {done ? "Printed" : failed ? "Print failed" : "Sending to printer…"}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{job.fileName} · {job.printerName}</p>
+        </div>
+        <Button onClick={onReset} variant="outline">
+          <RotateCcw className="mr-2 h-4 w-4" /> Print another
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

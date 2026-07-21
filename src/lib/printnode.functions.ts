@@ -2,10 +2,33 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const PN_BASE = "https://api.printnode.com";
+const API_KEY_SETTING = "printnode_api_key";
 
-function pnAuthHeader(): string {
-  const key = process.env.PRINTNODE_API_KEY;
-  if (!key) throw new Error("PRINTNODE_API_KEY is not configured");
+async function getServerSupabase() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
+
+async function readApiKey(): Promise<string | null> {
+  try {
+    const supabase = await getServerSupabase();
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", API_KEY_SETTING)
+      .maybeSingle();
+    const v = ((data?.value as string | null) ?? "").trim();
+    if (v) return v;
+  } catch {
+    // fall through to env
+  }
+  const env = (process.env.PRINTNODE_API_KEY ?? "").trim();
+  return env || null;
+}
+
+async function pnAuthHeader(): Promise<string> {
+  const key = await readApiKey();
+  if (!key) throw new Error("PrintNode API key is not configured. Set it at /api-settings.");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const b64 = typeof btoa === "function" ? btoa(`${key}:`) : (globalThis as any).Buffer.from(`${key}:`).toString("base64");
   return `Basic ${b64}`;
@@ -15,7 +38,7 @@ async function pn<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${PN_BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: pnAuthHeader(),
+      Authorization: await pnAuthHeader(),
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
@@ -61,12 +84,28 @@ function inferConnection(desc?: string): "wifi" | "ethernet" | "usb" | "bluetoot
   return "unknown";
 }
 
-async function getServerSupabase() {
-  const { createClient } = await import("@supabase/supabase-js");
-  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
-    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+export const getApiKeyStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const key = await readApiKey();
+  if (!key) return { configured: false, masked: "" };
+  return { configured: true, masked: `••••••••${key.slice(-4)}` };
+});
+
+export const saveApiKey = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ apiKey: z.string().trim().min(8).max(200) }).parse(d))
+  .handler(async ({ data }) => {
+    const supabase = await getServerSupabase();
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert({ key: API_KEY_SETTING, value: data.apiKey, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+    try {
+      await pn<unknown>("/whoami");
+    } catch (e) {
+      throw new Error(`Saved, but PrintNode rejected the key: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return { ok: true };
   });
-}
+
 
 export const discoverPrinters = createServerFn({ method: "POST" }).handler(async () => {
   const printers = await pn<PNPrinter[]>("/printers");
@@ -195,7 +234,7 @@ export const submitPrintJobFn = createServerFn({ method: "POST" })
         printer_id: data.printerId,
         file_name: data.fileName,
         status,
-        settings: data.settings ?? {},
+        settings: (data.settings ?? {}) as never,
         error_message: errorMessage,
       })
       .select()
