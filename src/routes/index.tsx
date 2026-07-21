@@ -19,6 +19,7 @@ import { RecentJobs } from "@/components/recent-jobs";
 import { uploadDocument } from "@/services/upload";
 import { submitPrintJob, fetchJobStatus } from "@/services/print";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useSharedFile } from "@/hooks/use-shared-file";
 import type { Printer, PrintJob, PrintSettings, UploadedFile } from "@/types/print";
 import { DEFAULT_SETTINGS } from "@/types/print";
 
@@ -37,6 +38,14 @@ function PrintPage() {
 
   const activeFile = files[0];
   const ready = !!activeFile && activeFile.status === "ready" && !!printer && printer.status !== "offline";
+
+  useSharedFile((shared) => {
+    setFiles((prev) => {
+      prev.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+      return [shared];
+    });
+    toast.success(`Loaded shared file: ${shared.name}`);
+  });
 
   const addFiles = (incoming: File[]) => {
     files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
