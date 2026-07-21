@@ -234,7 +234,7 @@ export const submitPrintJobFn = createServerFn({ method: "POST" })
         printer_id: data.printerId,
         file_name: data.fileName,
         status,
-        settings: data.settings ?? {},
+        settings: (data.settings ?? {}) as never,
         error_message: errorMessage,
       })
       .select()
