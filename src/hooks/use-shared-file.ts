@@ -2,7 +2,10 @@ import { useEffect } from "react";
 import type { UploadedFile } from "@/types/print";
 
 const STORAGE_KEY = "pending_print_file";
-const SOURCE_VALUE = "local_share";
+const SOURCE_LOCAL = "local_share";
+const SOURCE_PWA = "pwa_share";
+const SHARE_CACHE = "print-share-v1";
+const SHARE_KEY = "/__shared_file__";
 
 /**
  * Decode a base64 string (with or without a data-URL prefix) into a Uint8Array.
@@ -99,21 +102,62 @@ export function readPendingSharedFile(): UploadedFile | null {
  * from sessionStorage, hands it to `onFile`, clears the storage key, and strips the
  * query parameter from the URL so it doesn't re-fire.
  */
+async function readSharedFromCache(): Promise<UploadedFile | null> {
+  if (typeof window === "undefined" || !("caches" in window)) return null;
+  try {
+    const cache = await caches.open(SHARE_CACHE);
+    const res = await cache.match(SHARE_KEY);
+    if (!res) return null;
+    const type = res.headers.get("Content-Type") ?? "application/octet-stream";
+    const nameHeader = res.headers.get("X-Filename");
+    let name = nameHeader ? decodeURIComponent(nameHeader) : "shared-document";
+    if (!name.includes(".")) {
+      const ext = type.split("/")[1]?.split("+")[0];
+      if (ext) name = `${name}.${ext === "jpeg" ? "jpg" : ext}`;
+    }
+    const buf = await res.arrayBuffer();
+    const file = new File([buf], name, { type });
+    await cache.delete(SHARE_KEY);
+    const canPreview = type.startsWith("image/") || type === "application/pdf" || type.startsWith("text/");
+    return {
+      id: crypto.randomUUID(),
+      file,
+      name: file.name,
+      size: file.size,
+      progress: 100,
+      status: "ready",
+      previewUrl: canPreview ? URL.createObjectURL(file) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function useSharedFile(onFile: (file: UploadedFile) => void): void {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("source") !== SOURCE_VALUE) return;
+    const source = params.get("source");
+    if (source !== SOURCE_LOCAL && source !== SOURCE_PWA) return;
+
+    const cleanUrl = () => {
+      params.delete("source");
+      const qs = params.toString();
+      const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      window.history.replaceState({}, "", nextUrl);
+    };
+
+    if (source === SOURCE_PWA) {
+      readSharedFromCache().then((uploaded) => {
+        cleanUrl();
+        if (uploaded) onFile(uploaded);
+      });
+      return;
+    }
 
     const uploaded = readPendingSharedFile();
-
-    // Always clean up, even if decoding failed, so we don't loop.
     window.sessionStorage.removeItem(STORAGE_KEY);
-    params.delete("source");
-    const qs = params.toString();
-    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
-    window.history.replaceState({}, "", nextUrl);
-
+    cleanUrl();
     if (uploaded) onFile(uploaded);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
