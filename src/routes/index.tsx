@@ -20,6 +20,7 @@ import { uploadDocument } from "@/services/upload";
 import { submitPrintJob, fetchJobStatus } from "@/services/print";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useSharedFile } from "@/hooks/use-shared-file";
+import { getSharedFilesFromIDB } from "@/lib/shared-file-idb";
 import type { Printer, PrintJob, PrintSettings, UploadedFile } from "@/types/print";
 import { DEFAULT_SETTINGS } from "@/types/print";
 
