@@ -9,9 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ShareHandlerRouteImport } from './routes/share-handler'
 import { Route as ApiSettingsRouteImport } from './routes/api-settings'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ShareHandlerRoute = ShareHandlerRouteImport.update({
+  id: '/share-handler',
+  path: '/share-handler',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSettingsRoute = ApiSettingsRouteImport.update({
   id: '/api-settings',
   path: '/api-settings',
@@ -26,31 +32,42 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api-settings': typeof ApiSettingsRoute
+  '/share-handler': typeof ShareHandlerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api-settings': typeof ApiSettingsRoute
+  '/share-handler': typeof ShareHandlerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api-settings': typeof ApiSettingsRoute
+  '/share-handler': typeof ShareHandlerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api-settings'
+  fullPaths: '/' | '/api-settings' | '/share-handler'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api-settings'
-  id: '__root__' | '/' | '/api-settings'
+  to: '/' | '/api-settings' | '/share-handler'
+  id: '__root__' | '/' | '/api-settings' | '/share-handler'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiSettingsRoute: typeof ApiSettingsRoute
+  ShareHandlerRoute: typeof ShareHandlerRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/share-handler': {
+      id: '/share-handler'
+      path: '/share-handler'
+      fullPath: '/share-handler'
+      preLoaderRoute: typeof ShareHandlerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api-settings': {
       id: '/api-settings'
       path: '/api-settings'
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiSettingsRoute: ApiSettingsRoute,
+  ShareHandlerRoute: ShareHandlerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
