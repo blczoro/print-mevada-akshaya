@@ -20,6 +20,7 @@ import { uploadDocument } from "@/services/upload";
 import { submitPrintJob, fetchJobStatus } from "@/services/print";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useSharedFile } from "@/hooks/use-shared-file";
+import { getSharedFilesFromIDB } from "@/lib/shared-file-idb";
 import type { Printer, PrintJob, PrintSettings, UploadedFile } from "@/types/print";
 import { DEFAULT_SETTINGS } from "@/types/print";
 
@@ -46,6 +47,24 @@ function PrintPage() {
     });
     toast.success(`Loaded shared file: ${shared.name}`);
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getSharedFilesFromIDB();
+        if (cancelled || !data?.files?.length) return;
+        const files = (data.files as unknown[]).filter(
+          (f): f is File => f instanceof File && f.size > 0,
+        );
+        if (files.length) addFiles(files);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addFiles = (incoming: File[]) => {
     files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
