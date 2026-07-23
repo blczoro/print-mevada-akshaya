@@ -47,6 +47,24 @@ function PrintPage() {
     toast.success(`Loaded shared file: ${shared.name}`);
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getSharedFilesFromIDB();
+        if (cancelled || !data?.files?.length) return;
+        const files = (data.files as unknown[]).filter(
+          (f): f is File => f instanceof File && f.size > 0,
+        );
+        if (files.length) addFiles(files);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const addFiles = (incoming: File[]) => {
     files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
     const first = incoming[0];
