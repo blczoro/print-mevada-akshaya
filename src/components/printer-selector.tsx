@@ -220,7 +220,7 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                     </span>
                   </button>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[52px] text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground sm:pl-[52px]">
                     {ConnIcon && (
                       <span className="inline-flex items-center gap-1 capitalize">
                         <ConnIcon className="h-3 w-3" />
@@ -234,7 +234,7 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-end gap-1 pl-[52px]">
+                  <div className="flex flex-wrap items-center justify-end gap-1 sm:pl-[52px]">
                     <Button
                       variant="ghost"
                       size="sm"
