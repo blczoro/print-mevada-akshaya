@@ -161,12 +161,13 @@ function PrintPage() {
               <CollapsibleTrigger asChild>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between rounded-lg border border-border bg-card/60 px-3 py-2 text-sm hover:bg-accent/40"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-border bg-card/60 px-3 py-2 text-left text-sm hover:bg-accent/40"
                 >
-                  <span className="flex items-center gap-2">
-                    <Settings2 className="h-4 w-4" /> Print settings
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Settings2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Print settings</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="shrink-0 text-right text-[11px] text-muted-foreground sm:text-xs">
                     {settings.copies}× · {settings.paperSize} · {settings.mode === "color" ? "Color" : "B&W"} ·{" "}
                     {settings.duplex === "double" ? "Duplex" : "Single"}
                   </span>
