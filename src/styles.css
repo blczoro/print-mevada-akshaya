@@ -164,3 +164,14 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
 }
+
+@utility hide-badge {
+  #lovable-badge {
+    display: none !important;
+  }
+}
+
+/* Global fallback target */
+#lovable-badge {
+  display: none !important;
+}
