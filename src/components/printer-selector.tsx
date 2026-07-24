@@ -194,25 +194,30 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                     type="button"
                     disabled={disabled}
                     onClick={() => onSelect(p)}
-                    className="flex items-start gap-3 text-left disabled:cursor-not-allowed"
+                    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 text-left disabled:cursor-not-allowed"
                   >
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
                       <PrinterIcon className="h-5 w-5" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
-                        {p.isDefault && <Star className="h-3.5 w-3.5 fill-warning text-warning" />}
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                          {p.name}
+                        </p>
+                        {p.isDefault && (
+                          <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />
+                        )}
                       </div>
                       {p.computerName && (
                         <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3" /> {p.computerName}
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{p.computerName}</span>
                         </p>
                       )}
                     </div>
                     <span
                       className={cn(
-                        "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
+                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
                         STATUS_STYLES[p.status],
                       )}
                     >
@@ -220,7 +225,7 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                     </span>
                   </button>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground sm:pl-[52px]">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                     {ConnIcon && (
                       <span className="inline-flex items-center gap-1 capitalize">
                         <ConnIcon className="h-3 w-3" />
@@ -230,39 +235,43 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
                     <span>{p.supportsColor ? "Color" : "B&W"}</span>
                     <span>{p.supportsDuplex ? "Duplex" : "Single-side"}</span>
                     {p.paperSizes && p.paperSizes.length > 0 && (
-                      <span className="truncate">{p.paperSizes.join(" · ")}</span>
+                      <span className="min-w-0 truncate">{p.paperSizes.join(" · ")}</span>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-1 sm:pl-[52px]">
+                  <div className="flex items-center justify-between gap-1 border-t border-border/60 pt-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2 text-xs"
+                      className="h-7 min-w-0 flex-1 justify-start px-2 text-xs"
                       onClick={() => setDefaultMut.mutate(p.id)}
                       disabled={!!p.isDefault || setDefaultMut.isPending}
                     >
-                      <Star className={cn("mr-1 h-3 w-3", p.isDefault && "fill-warning text-warning")} />
-                      {p.isDefault ? "Default" : "Set default"}
+                      <Star
+                        className={cn("mr-1 h-3 w-3 shrink-0", p.isDefault && "fill-warning text-warning")}
+                      />
+                      <span className="truncate">{p.isDefault ? "Default" : "Set default"}</span>
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
                       onClick={() => {
                         setRenaming(p);
                         setRenameValue(p.name);
                       }}
+                      aria-label="Rename printer"
                     >
-                      <Pencil className="h-3 w-3" />
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
                       onClick={() => deleteMut.mutate(p.id)}
+                      aria-label="Remove printer"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -270,6 +279,7 @@ export function PrinterSelector({ selectedId, onSelect }: Props) {
             );
           })}
         </ul>
+
       )}
 
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>

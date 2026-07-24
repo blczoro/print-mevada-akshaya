@@ -9,13 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiSettingsRouteImport } from './routes/api-settings'
 import { Route as ShareHandlerRouteImport } from './routes/share-handler'
+import { Route as ApiSettingsRouteImport } from './routes/api-settings'
+import { Route as IndexRouteImport } from './routes/index'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ShareHandlerRoute = ShareHandlerRouteImport.update({
+  id: '/share-handler',
+  path: '/share-handler',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSettingsRoute = ApiSettingsRouteImport.update({
@@ -23,9 +23,9 @@ const ApiSettingsRoute = ApiSettingsRouteImport.update({
   path: '/api-settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ShareHandlerRoute = ShareHandlerRouteImport.update({
-  id: '/share-handler',
-  path: '/share-handler',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -61,11 +61,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/share-handler': {
+      id: '/share-handler'
+      path: '/share-handler'
+      fullPath: '/share-handler'
+      preLoaderRoute: typeof ShareHandlerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api-settings': {
@@ -75,11 +75,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/share-handler': {
-      id: '/share-handler'
-      path: '/share-handler'
-      fullPath: '/share-handler'
-      preLoaderRoute: typeof ShareHandlerRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
